@@ -11,7 +11,7 @@ Rešitev je implementirana brez uporabe samostojne vnaprej naučene drowsiness r
 
 ### 2.1 NTHU Drowsy Driver Detection Dataset
 Priporočena zbirka za končno evalvacijo drowsy/alert na video sekvencah. Omogoča:
-- scenarije z/bez očal,
+- scenarije z/brez očal,
 - različne svetlobne pogoje,
 - anotacije zaspanosti.
 
@@ -46,6 +46,8 @@ Na ROI obraza izračunamo centralne momente binarizirane slike in iz njih orient
 
 `|theta|` predstavlja nagib glave (roll).
 
+**Pomembno:** metoda ocenjuje predvsem **roll nagib** (levo/desno) in je približna 2D ocena. Za zanesljivo zaznavo nagiba naprej/nazaj (pitch) bi bila potrebna analiza obraznih točk ali 3D head-pose ocena.
+
 ### 3.4 Končna odločitev
 Drowsiness score:
 \[
@@ -63,19 +65,32 @@ Glavna skripta: `drowsiness.py`
 python drowsiness.py train-eye --dataset DATASET --out eye_svm.yml
 ```
 
-2. Obdelava videa:
+2. Obdelava videa + izvoz napovedi v CSV:
 ```bash
-python drowsiness.py run-video --input input.mp4 --output output.mp4 --eye-model eye_svm.yml
+python drowsiness.py run-video --input input.mp4 --output output.mp4 --eye-model eye_svm.yml --pred-csv results/preds.csv --y-true 0
 ```
 
 3. Evalvacija metrik + ROC/AUC:
 ```bash
-python drowsiness.py evaluate --pred-csv preds.csv --out-roc roc.png
+python drowsiness.py evaluate --pred-csv results/preds.csv --out-roc roc.png
 ```
 
-`preds.csv` naj vsebuje stolpce: `y_true,y_pred,score`.
+`run-video` zapiše CSV s stolpci:
+- `frame`
+- `y_true`
+- `y_pred`
+- `score`
+- `perclos`
+- `roll`
 
-## 5. Evalvacija
+## 5. Označevanje podatkov (`y_true`)
+Za šolsko nalogo je preprost in korekten pristop:
+- `video_alert_01.mp4` → `y_true = 0`
+- `video_drowsy_01.mp4` → `y_true = 1`
+
+Pri obdelavi posameznega videa podamo `--y-true`, skripta pa to oznako pripiše vsem frame-om tega videa.
+
+## 6. Evalvacija
 Uporabljene metrike:
 - Accuracy
 - Precision
@@ -86,7 +101,7 @@ Uporabljene metrike:
 
 Skripta `evaluate` izračuna vse metrike in shrani ROC graf (`roc.png`).
 
-## 6. Časovna in prostorska zahtevnost
+## 7. Časovna in prostorska zahtevnost
 Naj bo:
 - `F` število okvirjev,
 - `R` število pikslov ROI,
@@ -104,11 +119,12 @@ Skupno za video: približno linearno v številu okvirjev `O(F * (cascade + R + E
 ### Prostorska
 - frame buffer + ROI: `O(R)`,
 - zgodovina PERCLOS okna `W`: `O(W)`,
-- model SVM: `O(d)` uteži.
+- model SVM: `O(d)` uteži,
+- tabela napovedi: `O(F)` vrstic, če hranimo vse v pomnilniku do zapisa na disk.
 
 Skupna poraba pomnilnika je nizka in primerna za izvajanje blizu realnega časa.
 
-## 7. Možne izboljšave
+## 8. Možne izboljšave
 - robustnejša zaznava v nočnih pogojih (IR, histogram equalization),
 - adaptivni pragovi po uporabniku,
 - dodatni kazalniki (zehanje, trajanje zaprtja oči),

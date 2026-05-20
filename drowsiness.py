@@ -1,4 +1,5 @@
 import argparse
+import csv
 import json
 import os
 from collections import deque
@@ -164,7 +165,7 @@ def evaluate_csv(pred_csv, out_roc):
     print(json.dumps(metrics, indent=2))
 
 
-def run_video(video_in, video_out, eye_model):
+def run_video(video_in, video_out, eye_model, pred_csv=None, y_true=None):
     det = DrowsinessDetector(eye_model)
     cap = cv2.VideoCapture(video_in)
     if not cap.isOpened():
@@ -175,15 +176,35 @@ def run_video(video_in, video_out, eye_model):
     h = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
     writer = cv2.VideoWriter(video_out, cv2.VideoWriter_fourcc(*"mp4v"), fps, (w, h))
 
+    rows = []
+    frame_idx = 0
     while True:
         ok, frame = cap.read()
         if not ok:
             break
-        out, _ = det.detect(frame)
+        out, stats = det.detect(frame)
         writer.write(out)
+
+        row = {
+            "frame": frame_idx,
+            "y_true": "" if y_true is None else int(y_true),
+            "y_pred": int(stats["pred"]),
+            "score": float(stats["drowsy_score"]),
+            "perclos": float(stats["perclos"]),
+            "roll": float(stats["roll"]),
+        }
+        rows.append(row)
+        frame_idx += 1
 
     cap.release()
     writer.release()
+
+    if pred_csv:
+        os.makedirs(os.path.dirname(pred_csv) or ".", exist_ok=True)
+        with open(pred_csv, "w", newline="", encoding="utf-8") as f:
+            w = csv.DictWriter(f, fieldnames=["frame", "y_true", "y_pred", "score", "perclos", "roll"])
+            w.writeheader()
+            w.writerows(rows)
 
 
 if __name__ == "__main__":
@@ -198,6 +219,9 @@ if __name__ == "__main__":
     rv.add_argument("--input", required=True)
     rv.add_argument("--output", default="output.mp4")
     rv.add_argument("--eye-model", default="eye_svm.yml")
+    rv.add_argument("--pred-csv", default=None, help="Pot za shranjevanje napovedi CSV.")
+    rv.add_argument("--y-true", type=int, choices=[0, 1], default=None,
+                    help="Ground truth oznaka za vse frame-e videa (0=alert, 1=drowsy).")
 
     ev = sub.add_parser("evaluate")
     ev.add_argument("--pred-csv", required=True)
@@ -207,6 +231,6 @@ if __name__ == "__main__":
     if args.cmd == "train-eye":
         train_eye_model(args.dataset, args.out)
     elif args.cmd == "run-video":
-        run_video(args.input, args.output, args.eye_model)
+        run_video(args.input, args.output, args.eye_model, pred_csv=args.pred_csv, y_true=args.y_true)
     elif args.cmd == "evaluate":
         evaluate_csv(args.pred_csv, args.out_roc)
