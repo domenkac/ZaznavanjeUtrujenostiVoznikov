@@ -39,18 +39,27 @@ class EyeStateClassifier:
 
 
 class HeadTiltEstimator:
-    """Face roll estimator based on image moments on the face ROI."""
+    """Approximate face roll from the line connecting two detected eyes."""
 
     @staticmethod
-    def estimate_roll_deg(face_roi):
-        gray = cv2.cvtColor(face_roi, cv2.COLOR_BGR2GRAY)
-        blur = cv2.GaussianBlur(gray, (5, 5), 0)
-        _, bw = cv2.threshold(blur, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
-        m = cv2.moments(bw)
-        if abs(m["mu20"] - m["mu02"]) < 1e-6:
-            return 0.0
-        theta = 0.5 * np.arctan2(2.0 * m["mu11"], (m["mu20"] - m["mu02"]))
-        return float(np.degrees(theta))
+    def estimate_roll_deg(eyes):
+        if len(eyes) < 2:
+            return 0.0, False
+
+        # Haar can return detections in an arbitrary order. Use the two largest
+        # candidates and calculate the angle from left eye to right eye.
+        selected = sorted(eyes, key=lambda box: box[2] * box[3], reverse=True)[:2]
+        centers = sorted(
+            [(x + w / 2.0, y + h / 2.0) for x, y, w, h in selected],
+            key=lambda point: point[0],
+        )
+        (left_x, left_y), (right_x, right_y) = centers
+        dx = right_x - left_x
+        if dx <= 1e-6:
+            return 0.0, False
+
+        roll = np.degrees(np.arctan2(right_y - left_y, dx))
+        return float(roll), True
 
 
 class DrowsinessDetector:
@@ -58,8 +67,11 @@ class DrowsinessDetector:
         self.face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + "haarcascade_frontalface_default.xml")
         self.eye_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + "haarcascade_eye_tree_eyeglasses.xml")
         self.eye_classifier = EyeStateClassifier()
-        if eye_model_path and os.path.exists(eye_model_path):
-            self.eye_classifier.model = cv2.ml.SVM_load(eye_model_path)
+        if not eye_model_path or not os.path.exists(eye_model_path):
+            raise FileNotFoundError(
+                f"Model oči ne obstaja: {eye_model_path}. Najprej zaženi ukaz train-eye."
+            )
+        self.eye_classifier.model = cv2.ml.SVM_load(eye_model_path)
         self.tilt_estimator = HeadTiltEstimator()
         self.close_hist = deque(maxlen=perclos_window)
         self.close_thr = close_thr
@@ -75,10 +87,14 @@ class DrowsinessDetector:
             best = max(faces, key=lambda b: b[2] * b[3])
             x, y, w, h = best
             cv2.rectangle(out, (x, y), (x + w, y + h), (80, 220, 80), 2)
-            face_roi = frame[y:y + h, x:x + w]
-
-            roll = self.tilt_estimator.estimate_roll_deg(face_roi)
-            eyes = self.eye_cascade.detectMultiScale(gray[y:y + h, x:x + w], scaleFactor=1.1, minNeighbors=4)
+            detected_eyes = self.eye_cascade.detectMultiScale(
+                gray[y:y + h, x:x + w], scaleFactor=1.1, minNeighbors=4
+            )
+            # Real eyes should be in the upper part of the detected face. This
+            # removes many mouth/nose false positives from the Haar detector.
+            eyes = [tuple(map(int, eye)) for eye in detected_eyes if eye[1] + eye[3] / 2.0 < 0.65 * h]
+            eyes = sorted(eyes, key=lambda box: box[2] * box[3], reverse=True)[:2]
+            roll, roll_valid = self.tilt_estimator.estimate_roll_deg(eyes)
 
             probs = []
             for (ex, ey, ew, eh) in eyes[:2]:
@@ -94,10 +110,12 @@ class DrowsinessDetector:
             self.close_hist.append(1 if p_closed_frame > self.close_thr else 0)
             perclos = float(np.mean(self.close_hist)) if self.close_hist else 0.0
 
-            drowsy_score = 0.65 * perclos + 0.35 * min(abs(roll) / 35.0, 1.0)
-            is_drowsy = drowsy_score > 0.5 or abs(roll) > self.tilt_thr
+            roll_component = min(abs(roll) / 35.0, 1.0) if roll_valid else 0.0
+            drowsy_score = 0.65 * perclos + 0.35 * roll_component
+            is_drowsy = drowsy_score > 0.5 or (roll_valid and abs(roll) > self.tilt_thr)
 
-            txt = f"PERCLOS={perclos:.2f} roll={roll:.1f} score={drowsy_score:.2f}"
+            roll_text = f"{roll:.1f}" if roll_valid else "N/A"
+            txt = f"PERCLOS={perclos:.2f} roll={roll_text} score={drowsy_score:.2f}"
             cv2.putText(out, txt, (20, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
             cv2.putText(out, "DROWSY" if is_drowsy else "ALERT", (20, 60), cv2.FONT_HERSHEY_SIMPLEX, 0.9,
                         (0, 0, 255) if is_drowsy else (0, 255, 0), 2)
@@ -107,9 +125,16 @@ class DrowsinessDetector:
                 "roll": roll,
                 "drowsy_score": drowsy_score,
                 "pred": int(is_drowsy),
+                "roll_valid": int(roll_valid),
             }
 
-        return out, {"perclos": 0.0, "roll": 0.0, "drowsy_score": 0.0, "pred": 0}
+        return out, {
+            "perclos": 0.0,
+            "roll": 0.0,
+            "drowsy_score": 0.0,
+            "pred": 0,
+            "roll_valid": 0,
+        }
 
 
 def load_eye_dataset(dataset_dir):
@@ -174,7 +199,11 @@ def run_video(video_in, video_out, eye_model, pred_csv=None, y_true=None):
     fps = cap.get(cv2.CAP_PROP_FPS) or 25.0
     w = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
     h = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+    os.makedirs(os.path.dirname(video_out) or ".", exist_ok=True)
     writer = cv2.VideoWriter(video_out, cv2.VideoWriter_fourcc(*"mp4v"), fps, (w, h))
+    if not writer.isOpened():
+        cap.release()
+        raise RuntimeError(f"Ne morem ustvariti izhodnega videa: {video_out}")
 
     rows = []
     frame_idx = 0
@@ -192,6 +221,7 @@ def run_video(video_in, video_out, eye_model, pred_csv=None, y_true=None):
             "score": float(stats["drowsy_score"]),
             "perclos": float(stats["perclos"]),
             "roll": float(stats["roll"]),
+            "roll_valid": int(stats["roll_valid"]),
         }
         rows.append(row)
         frame_idx += 1
@@ -202,7 +232,10 @@ def run_video(video_in, video_out, eye_model, pred_csv=None, y_true=None):
     if pred_csv:
         os.makedirs(os.path.dirname(pred_csv) or ".", exist_ok=True)
         with open(pred_csv, "w", newline="", encoding="utf-8") as f:
-            w = csv.DictWriter(f, fieldnames=["frame", "y_true", "y_pred", "score", "perclos", "roll"])
+            w = csv.DictWriter(
+                f,
+                fieldnames=["frame", "y_true", "y_pred", "score", "perclos", "roll", "roll_valid"],
+            )
             w.writeheader()
             w.writerows(rows)
 

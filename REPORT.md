@@ -39,12 +39,12 @@ Za vsak zaznan očesni izrez:
 S tem dobimo verjetnost `p_closed`. Iz časovnega okna se izračuna **PERCLOS**.
 
 ### 3.3 Ocena nagiba glave
-Na ROI obraza izračunamo centralne momente binarizirane slike in iz njih orientacijo elipse:
+Po zaznavi dveh oči izračunamo njuni središči. Približni roll je naklon premice od levega do desnega očesa:
 \[
-\theta = \frac{1}{2}\arctan\left(\frac{2\mu_{11}}{\mu_{20}-\mu_{02}}\right)
+\theta = \operatorname{atan2}(y_D-y_L, x_D-x_L)
 \]
 
-`|theta|` predstavlja nagib glave (roll).
+Zaznave oči omejimo na zgornjih 65 % obraza, da zmanjšamo lažne zaznave nosu in ust. Če dveh veljavnih oči ni, je `roll_valid=0` in nagib ne prispeva h končni odločitvi.
 
 **Pomembno:** metoda ocenjuje predvsem **roll nagib** (levo/desno) in je približna 2D ocena. Za zanesljivo zaznavo nagiba naprej/nazaj (pitch) bi bila potrebna analiza obraznih točk ali 3D head-pose ocena.
 
@@ -82,6 +82,7 @@ python drowsiness.py evaluate --pred-csv results/preds.csv --out-roc roc.png
 - `score`
 - `perclos`
 - `roll`
+- `roll_valid`
 
 ## 5. Označevanje podatkov (`y_true`)
 Za šolsko nalogo je preprost in korekten pristop:
@@ -112,9 +113,9 @@ Naj bo:
 Na okvir približno:
 - zaznava obraza/oči: odvisna od kaskad, dominantni del,
 - HOG + SVM: `O(E * d)`,
-- momenti ROI: `O(R)`.
+- izračun naklona iz dveh oči: `O(1)`.
 
-Skupno za video: približno linearno v številu okvirjev `O(F * (cascade + R + E*d))`.
+Skupno za video: približno linearno v številu okvirjev `O(F * (cascade + E*d))`.
 
 ### Prostorska
 - frame buffer + ROI: `O(R)`,

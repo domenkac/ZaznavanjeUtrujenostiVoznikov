@@ -2,7 +2,7 @@
 
 Projekt implementira zaznavanje utrujenosti iz videa z uporabo:
 - zapiranja oči (PERCLOS),
-- nagiba glave (predvsem roll: levo/desno).
+- nagiba glave (približni roll levo/desno, izračunan iz položaja dveh zaznanih oči).
 
 Podrobno poročilo je v `REPORT.md`.
 
@@ -63,13 +63,14 @@ python drowsiness.py run-video \
 - `score`
 - `perclos`
 - `roll`
+- `roll_valid` (`1`, če sta bili zaznani dve očesi in je roll veljaven; sicer `0`)
 
 Primer:
 ```csv
-frame,y_true,y_pred,score,perclos,roll
-0,0,0,0.12,0.05,3.4
-1,0,0,0.10,0.04,2.7
-2,0,1,0.57,0.62,5.1
+frame,y_true,y_pred,score,perclos,roll,roll_valid
+0,0,0,0.12,0.05,3.4,1
+1,0,0,0.10,0.04,2.7,1
+2,0,0,0.08,0.00,0.0,0
 ```
 
 ## Evalvacija
@@ -79,3 +80,7 @@ python drowsiness.py evaluate --pred-csv results/preds.csv --out-roc results/roc
 ```
 
 Če imaš več CSV (npr. alert + drowsy), jih združiš npr. s pandas ali shell orodji in nato poženeš `evaluate`.
+
+
+## Razlaga ocene nagiba glave
+Roll se izračuna iz naklona premice med središčema dveh zaznanih oči. Če program ne zazna dveh uporabnih oči, nastavi `roll_valid=0`, roll pa ne vpliva na končno odločitev. S tem se preprečijo lažni alarmi zaradi nerealnih kotov, ki jih je prejšnja metoda z momenti celotnega obraza lahko ocenila blizu ±90°. Po posodobitvi kode modela oči ni treba ponovno učiti; ponovno je treba pognati le `run-video`, da nastaneta nov video in CSV.
