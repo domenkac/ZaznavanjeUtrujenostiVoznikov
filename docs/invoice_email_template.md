@@ -40,3 +40,17 @@ Pred pošiljanjem računa zamenjaj naslednje placeholderje:
 ## Opomba
 
 Predloga ne spreminja obstoječih nastavitev za logotip ali podpis. Uporabi obstoječi URL/sliko in jo vstavi v `{{ logo_url }}` oziroma `{{ signature_url }}`.
+
+
+## Obvezni bloki za WordPress/PDF kodo
+
+Če obstoječi PDF ali e-poštna predloga ne uporablja `templates/invoice_email.html`, uporabi helperje iz `templates/wordpress_invoice_required_blocks.php`. Ti helperji eksplicitno vrnejo obvezni tekst za glavo in nogo računa:
+
+```php
+echo '<style>' . psierp_required_invoice_blocks_css() . '</style>';
+echo psierp_required_invoice_header_html($invoice_number);
+// ... obstoječa vsebina računa ...
+echo psierp_required_invoice_footer_html();
+```
+
+S tem se v izpisu obvezno prikažejo podatki podjetja, TRR/IBAN, ID za DDV, številka računa in celotno besedilo o plačilu oziroma DDV.
