@@ -1,0 +1,253 @@
+<!doctype html>
+<html lang="sl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Račun {{ invoice_number }}</title>
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      background: #f5f5f5;
+      color: #111827;
+      font-family: Arial, Helvetica, sans-serif;
+      font-size: 14px;
+      line-height: 1.25;
+    }
+
+    .invoice-page {
+      width: 760px;
+      max-width: calc(100% - 32px);
+      min-height: 980px;
+      margin: 24px auto;
+      padding: 78px 72px 58px;
+      background: #ffffff;
+      box-sizing: border-box;
+    }
+
+    .top {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 32px;
+      margin-bottom: 76px;
+    }
+
+    .logo {
+      width: 112px;
+      height: auto;
+      display: block;
+      margin-top: 8px;
+    }
+
+    .company {
+      text-align: right;
+      font-weight: 700;
+      font-size: 16px;
+      line-height: 1.1;
+    }
+
+    .meta-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 24px;
+      align-items: start;
+      margin-bottom: 92px;
+    }
+
+    .section-title {
+      font-weight: 700;
+      font-size: 16px;
+      margin-bottom: 8px;
+      border-bottom: 2px solid #111111;
+      padding-bottom: 2px;
+    }
+
+    .client-name {
+      font-weight: 700;
+      font-size: 16px;
+      margin-top: 14px;
+    }
+
+    .invoice-info {
+      text-align: right;
+      font-weight: 700;
+      font-size: 16px;
+      line-height: 1.18;
+      border-top: 2px solid #111111;
+      padding-top: 3px;
+    }
+
+    .items-title {
+      font-weight: 700;
+      font-size: 16px;
+      margin-bottom: 18px;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+
+    .items thead th {
+      font-weight: 700;
+      font-size: 16px;
+      border-bottom: 2px solid #111111;
+      padding: 0 0 2px;
+      text-align: right;
+    }
+
+    .items thead th:first-child,
+    .items tbody td:first-child {
+      text-align: left;
+    }
+
+    .items tbody td {
+      padding: 3px 0 0;
+      vertical-align: top;
+      text-align: right;
+    }
+
+    .items-space {
+      height: 62px;
+      border-bottom: 2px solid #111111;
+    }
+
+    .totals {
+      width: 320px;
+      margin-left: auto;
+      margin-bottom: 72px;
+      font-weight: 700;
+      font-size: 16px;
+    }
+
+    .totals td {
+      padding: 5px 0;
+      border-bottom: 2px solid #111111;
+    }
+
+    .totals td:last-child {
+      text-align: right;
+      white-space: nowrap;
+    }
+
+    .footer {
+      margin-top: 42px;
+      font-size: 14px;
+      line-height: 1.32;
+    }
+
+    .signature {
+      margin-top: 18px;
+      text-align: right;
+      font-size: 13px;
+    }
+
+    .signature img {
+      width: 170px;
+      max-width: 45%;
+      height: auto;
+      display: block;
+      margin-left: auto;
+    }
+
+    @media print {
+      body { background: #ffffff; }
+      .invoice-page {
+        width: auto;
+        max-width: none;
+        min-height: 0;
+        margin: 0;
+        padding: 56px 52px;
+      }
+    }
+
+    @media (max-width: 640px) {
+      .invoice-page { padding: 36px 24px; }
+      .top, .meta-row { grid-template-columns: 1fr; display: block; }
+      .company, .invoice-info { text-align: left; margin-top: 24px; }
+      .totals { width: 100%; }
+    }
+  </style>
+</head>
+<body>
+  <main class="invoice-page">
+    <section class="top">
+      <div>
+        <img class="logo" src="{{ logo_url }}" alt="{{ logo_alt }}">
+      </div>
+
+      <div class="company">
+        Psihoterapija in svetovanje<br>
+        Jasmina Čavužić, s.p.<br>
+        info@postavi-meje.si<br>
+        041 372 076<br>
+        TRR: SI56 0400 0028 2135 887<br>
+        ID za DDV: 90692993
+      </div>
+    </section>
+
+    <section class="meta-row">
+      <div class="client">
+        <div class="section-title">Naročnik:</div>
+        <div class="client-name">{{ customer_name }}</div>
+      </div>
+
+      <div class="invoice-info">
+        Račun št.:&nbsp; {{ invoice_number }}<br>
+        Datum storitve:&nbsp; {{ service_date }}<br>
+        Datum izdaje:&nbsp; {{ issue_date }}<br>
+        Kraj izdaje:&nbsp; Celje<br>
+        Zapade v plačilo:&nbsp; {{ due_date }}
+      </div>
+    </section>
+
+    <section>
+      <div class="items-title">Postavke računa:</div>
+      <table class="items" aria-label="Postavke računa">
+        <thead>
+          <tr>
+            <th>Opis storitve</th>
+            <th>Količina</th>
+            <th>Cena (€)</th>
+            <th>Skupaj (€)</th>
+          </tr>
+        </thead>
+        <tbody>
+          {{ invoice_items }}
+          <tr><td colspan="4" class="items-space"></td></tr>
+        </tbody>
+      </table>
+
+      <table class="totals" aria-label="Zneski računa">
+        <tbody>
+          <tr>
+            <td>Skupni znesek:</td>
+            <td>{{ total_amount }} €</td>
+          </tr>
+          <tr>
+            <td>Znesek za plačilo:</td>
+            <td>{{ amount_due }} €</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section class="footer">
+      <p>Hvala za zaupanje.</p>
+
+      <p>
+        DDV ni obračunan na podlagi 1. odstavka 94. člena Zakona o davku na dodano vrednost.<br>
+        Navedeni znesek nakažite na poslovni račun odprt pri OTP Banka: <strong>SI56 0400 0028 2135 887</strong>.<br>
+        Za sklic uporabite SI00 in številko računa.<br>
+        V primeru nepravočasnega plačila bomo zaračunali zakonske zamudne obresti.
+      </p>
+
+      <div class="signature">
+        <div>Jasmina Čavužić, s.p.</div>
+        <img src="{{ signature_url }}" alt="Podpis Jasmina Čavužić, s.p.">
+      </div>
+    </section>
+  </main>
+</body>
+</html>
